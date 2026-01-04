@@ -1,0 +1,73 @@
+//Blinking Multiple LEDs at Different Frequencies
+
+#include "stm32f4xx.h"
+
+void TIM2_IRQHandler(void) {
+    if (TIM2->SR & TIM_SR_UIF) {
+        TIM2->SR &= ~TIM_SR_UIF; // Clear UIF
+        GPIOA->ODR ^= (1 << 3);  // Toggle LED 1 (PA3)
+    }
+}
+
+void TIM3_IRQHandler(void) {
+    if (TIM3->SR & TIM_SR_UIF) {
+        TIM3->SR &= ~TIM_SR_UIF; 
+        GPIOB->ODR ^= (1 << 0);  // Toggle LED 2 (PB0)
+    }
+}
+
+void TIM4_IRQHandler(void) {
+    if (TIM4->SR & TIM_SR_UIF) {
+        TIM4->SR &= ~TIM_SR_UIF; 
+        GPIOC->ODR ^= (1 << 13);  // Toggle LED 3 (PC13)
+    }
+}
+
+int main(void) {
+    // 1. Enable GPIOB clock (untuk LED external) 
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN);
+
+    // 2. Configure PB0, PB1, PB2 as Output 
+    // Reset mode bits (0x3UL) lalu Set Output (0x1UL) - Persis Slide 37/40
+    GPIOA->MODER &= ~(0x3UL << (3 * 2));
+    GPIOA->MODER |=  (0x1UL << (3 * 2));
+    
+    GPIOB->MODER &= ~(0x3UL << (0 * 2));
+    GPIOB->MODER |=  (0x1UL << (0 * 2));
+
+    GPIOC->MODER &= ~(0x3UL << (13 * 2));
+    GPIOC->MODER |=  (0x1UL << (13 * 2));
+
+    // 3. Enable Timer Clocks 
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
+    RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
+
+    // Timer 2 (Cepat)
+    TIM2->PSC = 16000; 
+    TIM2->ARR = 199;   // ~200ms
+    TIM2->CNT = 0;
+    TIM2->DIER |= TIM_DIER_UIE; // Enable interrupt
+    NVIC_EnableIRQ(TIM2_IRQn);
+    TIM2->CR1 |= TIM_CR1_CEN;   // Start
+
+    // Timer 3 (Sedang)
+    TIM3->PSC = 16000;
+    TIM3->ARR = 499;   // ~500ms
+    TIM3->CNT = 0;
+    TIM3->DIER |= TIM_DIER_UIE;
+    NVIC_EnableIRQ(TIM3_IRQn);
+    TIM3->CR1 |= TIM_CR1_CEN;
+
+    // Timer 4 (Lambat)
+    TIM4->PSC = 16000;
+    TIM4->ARR = 999;   
+    TIM4->CNT = 0;
+    TIM4->DIER |= TIM_DIER_UIE;
+    NVIC_EnableIRQ(TIM4_IRQn);
+    TIM4->CR1 |= TIM_CR1_CEN;
+
+    while (1) {
+        // Loop kosong seperti Slide 40
+    }
+}

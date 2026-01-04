@@ -1,0 +1,59 @@
+//Debouncing Pushbutton (Semaphore)
+#include "stm32f4xx.h"
+
+// Variabel global sesuai Slide 43
+volatile unsigned int pressed = 0;
+
+// Handler EXTI0 (PA0 - Tombol Bawaan)
+void EXTI0_IRQHandler(void) {
+    // Sesuai Slide 43: Set pressed = 1
+    pressed = 1;
+    // Clear Pending Register
+    EXTI->PR |= (1 << 0);
+}
+
+int main(void) {
+    pressed = 0;
+
+    // 1. Enable Clocks 
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN; // Tombol PA0
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN; // LED PC13
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN; // Untuk Interrupt Eksternal
+
+    // 2. Configure PC13 as Output (LED) 
+    GPIOC->MODER &= ~(0x3UL << (13 * 2));
+    GPIOC->MODER |=  (0x1UL << (13 * 2));
+
+    // 3. Configure PA0 as Input for Built-in Button 
+    // Tombol bawaan BlackPill itu Active Low (Nyambung ke Ground)
+    GPIOA->MODER &= ~(0x3UL << (0 * 2)); // Input mode (00)
+    
+    // UBAHAN PENTING: Gunakan PULL-UP (01) karena tombol connect ke Ground
+    GPIOA->PUPDR &= ~(0x3UL << (0 * 2)); 
+    GPIOA->PUPDR |=  (0x1UL << (0 * 2)); // Pull-Up (01)
+
+    // 4. EXTI Configuration 
+    SYSCFG->EXTICR[0] &= ~(0xF); // Map EXTI0 ke PA0
+    EXTI->IMR |= (1 << 0);       // Unmask Line 0
+    
+    // UBAHAN PENTING: Gunakan FALLING EDGE (FTSR)
+    // Karena saat ditekan, tegangan turun dari High ke Low
+    EXTI->FTSR |= (1 << 0);      // Falling edge trigger enabled
+    // EXTI->RTSR dibiarkan 0 (disable rising edge)
+
+    // 5. NVIC Configuration 
+    NVIC_EnableIRQ(EXTI0_IRQn);
+
+    // Loop utama sesuai Slide 43 
+    while(1) {
+        if (pressed) {
+            // Semaphore logic
+            GPIOC->ODR ^= (1 << 13); // Toggle LED
+            
+            // Simple delay untuk debounce
+            for(int i=0; i<50000; i++); 
+
+            pressed = 0; // Reset semaphore
+        }
+    }
+}
